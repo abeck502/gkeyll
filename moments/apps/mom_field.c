@@ -148,6 +148,7 @@ moment_field_init(const struct gkyl_moment *mom, const struct gkyl_moment_field 
           fld->lower_bc[dir] = gkyl_wv_apply_bc_new(
             &app->grid, maxwell, app->geom, dir, GKYL_LOWER_EDGE, nghost,
             bc_lower_func, mom_fld->ctx);
+          break; // A.B. 4-17-26 Missing break statement added here (prevented lower BC from being set when using GKYL_FIELD_FUNC for lower BC)
 
         case GKYL_FIELD_COPY:
         case GKYL_FIELD_WEDGE:
