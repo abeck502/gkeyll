@@ -27,6 +27,7 @@
 #include <gkyl_mhd_src.h>
 #include <gkyl_moment.h>
 #include <gkyl_moment_braginskii.h>
+#include <gkyl_moment_viscosity.h>
 #include <gkyl_moment_em_coupling.h>
 #include <gkyl_mp_scheme.h>
 #include <gkyl_range.h>
@@ -75,12 +76,18 @@ struct moment_species {
   struct gkyl_kann_net* ann; // Neural network architecture.
   int poly_order; // Polynomial order of learned DG coefficients.
   enum gkyl_braginskii_type type_brag; // which Braginskii equations
+  
+  enum gkyl_viscosity_type type_visc; // which viscosity model to use (now just constant dynamic viscosity)
+
+  double mu_visc; // dynamic viscosity for constant viscosity model
 
   bool has_friction; // Run with frictional sources.
   bool use_explicit_friction; // Use an explicit (SSP-RK3) solver for integrating frictional sources.
   double friction_Z; // Ionization number for frictional sources.
   double friction_T_elc; // Electron temperature for frictional sources.
   double friction_Lambda_ee; // Electron-electron collisional term for frictional sources.
+  double friction_tau_en; // Electron-neutral momentum relaxation time for frictional sources.
+  double friction_tau_in; // Ion-neutral momentum relaxation time for frictional sources.
 
   bool has_volume_sources; // Run with volume-based geometrical sources.
   double volume_gas_gamma; // Adiabatic index for volume-based geometrical sources.
@@ -140,6 +147,8 @@ struct moment_species {
   gkyl_fv_proj *proj_nT_source;
   bool nT_source_set_only_once; // set by user
   bool nT_source_is_set; // to be set at run time
+
+  double rho_floor; // mass density floor (reset to floor after applied bcs) set by app level
 
   struct gkyl_array *bc_buffer; // buffer for periodic BCs
 
@@ -253,7 +262,10 @@ struct moment_coupling {
   // Neural network-based closure solver (if present).
   struct gkyl_ten_moment_nn_closure *nn_closure_slvr[GKYL_MAX_SPECIES];
   // Braginskii solver (if present).
-  struct gkyl_moment_braginskii *brag_slvr; 
+  struct gkyl_moment_braginskii *brag_slvr;
+
+  // Viscosity solver (if present).
+  struct gkyl_moment_viscosity *visc_slvr; 
 
   // array for stable time-step from non-ideal terms  
   struct gkyl_array *non_ideal_cflrate[GKYL_MAX_SPECIES];
@@ -291,6 +303,8 @@ struct gkyl_moment_app {
 
   bool has_braginskii; // has Braginskii transport
   double coll_fac; // multiplicative collisionality factor for Braginskii  
+
+  bool has_viscosity; // has viscosity (switching)
 
   int num_periodic_dir; // number of periodic directions
   int periodic_dirs[3]; // list of periodic directions
@@ -340,6 +354,7 @@ struct gkyl_moment_app {
   struct gkyl_update_status (*update_func)(gkyl_moment_app *app, double dt0);
 
   bool has_collision; // has collisions
+  double collision_n_floor; // number density floor for collisions
   // scaling factors for collision frequencies so that nu_sr=nu_base_sr/rho_s
   // nu_rs=nu_base_rs/rho_r, and nu_base_sr=nu_base_rs
   double nu_base[GKYL_MAX_SPECIES][GKYL_MAX_SPECIES];

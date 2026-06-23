@@ -45,6 +45,7 @@ gkyl_moment_em_coupling_new(struct gkyl_moment_em_coupling_inp inp)
 
   mom_em->has_collision = inp.has_collision;
   mom_em->use_rel = inp.use_rel;
+  mom_em->collision_n_floor = inp.collision_n_floor;
 
   if (mom_em->has_collision) {
     for (int i = 0; i < mom_em->nfluids; i++) {
@@ -71,6 +72,8 @@ gkyl_moment_em_coupling_new(struct gkyl_moment_em_coupling_inp inp)
     mom_em->friction_Z = inp.friction_Z;
     mom_em->friction_T_elc = inp.friction_T_elc;
     mom_em->friction_Lambda_ee = inp.friction_Lambda_ee;
+    mom_em->friction_tau_en = inp.friction_tau_en;
+    mom_em->friction_tau_in = inp.friction_tau_in;
   }
 
   mom_em->has_volume_sources = inp.has_volume_sources;
@@ -141,13 +144,15 @@ gkyl_moment_em_coupling_new(struct gkyl_moment_em_coupling_inp inp)
 void
 gkyl_moment_em_coupling_implicit_advance(const gkyl_moment_em_coupling* mom_em, double t_curr, double dt, const struct gkyl_range* update_range,
   struct gkyl_array* fluid[GKYL_MAX_SPECIES], const struct gkyl_array* app_accel[GKYL_MAX_SPECIES], const struct gkyl_array* p_rhs[GKYL_MAX_SPECIES],
-  struct gkyl_array* em, const struct gkyl_array* app_current, const struct gkyl_array* ext_em, const struct gkyl_array* nT_sources[GKYL_MAX_SPECIES])
+  struct gkyl_array* em, const struct gkyl_array* app_current, const struct gkyl_array* ext_em, const struct gkyl_array* nT_sources[GKYL_MAX_SPECIES],
+  const struct gkyl_array *species_embed_mask[GKYL_MAX_SPECIES])
 {
   int nfluids = mom_em->nfluids;
   double *fluid_s[GKYL_MAX_SPECIES];
   const double *app_accel_s[GKYL_MAX_SPECIES];
   const double *p_rhs_s[GKYL_MAX_SPECIES];
   const double *nT_sources_s[GKYL_MAX_SPECIES];
+  const double *species_embed_mask_s[GKYL_MAX_SPECIES];
 
   struct gkyl_range_iter iter;
   gkyl_range_iter_init(&iter, update_range);
@@ -160,13 +165,16 @@ gkyl_moment_em_coupling_implicit_advance(const gkyl_moment_em_coupling* mom_em, 
       app_accel_s[i] = gkyl_array_cfetch(app_accel[i], cell_idx);
       p_rhs_s[i] = gkyl_array_cfetch(p_rhs[i], cell_idx);
       nT_sources_s[i] = gkyl_array_cfetch(nT_sources[i], cell_idx);
+      // checking for embed mask for species A.B. 2/19/26
+      species_embed_mask_s[i] = gkyl_array_cfetch(species_embed_mask[i], cell_idx);
+
     }
 
     double *em_arr = em ? gkyl_array_fetch(em, cell_idx) : 0;
     const double *app_current_arr = app_current ? gkyl_array_cfetch(app_current, cell_idx) : 0;
     const double *ext_em_arr = ext_em ? gkyl_array_cfetch(ext_em, cell_idx) : 0;
 
-    implicit_source_coupling_update(mom_em, t_curr, dt, fluid_s, app_accel_s, p_rhs_s, em_arr, app_current_arr, ext_em_arr, nT_sources_s);
+    implicit_source_coupling_update(mom_em, t_curr, dt, fluid_s, app_accel_s, p_rhs_s, em_arr, app_current_arr, ext_em_arr, nT_sources_s, species_embed_mask_s);
   }
 }
 
@@ -181,8 +189,6 @@ gkyl_moment_em_coupling_explicit_advance(const gkyl_moment_em_coupling* mom_em, 
   const double *app_accel_s[GKYL_MAX_SPECIES];
   const double *p_rhs_s[GKYL_MAX_SPECIES];
   const double *nT_sources_s[GKYL_MAX_SPECIES];
-
-  double dt_local = 2.0 * dt;
 
   struct gkyl_range_iter iter;
   gkyl_range_iter_init(&iter, update_range);
@@ -202,7 +208,7 @@ gkyl_moment_em_coupling_explicit_advance(const gkyl_moment_em_coupling* mom_em, 
     const double *ext_em_arr = ext_em ? gkyl_array_cfetch(ext_em, cell_idx) : 0;
 
     if (mom_em->use_rel) {
-      explicit_source_coupling_update(mom_em, t_curr, dt_local, fluid_s, app_accel_s, em_arr, app_current_arr, app_current1_arr, app_current2_arr,
+      explicit_source_coupling_update(mom_em, t_curr, dt, fluid_s, app_accel_s, em_arr, app_current_arr, app_current1_arr, app_current2_arr,
         ext_em_arr, nstrang);
     }
   }

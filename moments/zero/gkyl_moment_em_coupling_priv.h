@@ -24,6 +24,7 @@ struct gkyl_moment_em_coupling {
 
   bool has_collision; // Run with collisions switched on.
   bool use_rel; // Assume special relativistic fluid species.
+  double collision_n_floor; // Number density floor for collisions; species below this skip collision updates.
 
   // Matrix of scaling factors for collision frequencies. Should be symmetric (i.e. nu_base_sr = nu_base_rs).
   // These are defined such that nu_sr = nu_base_sr / rho_s, and nu_rs = nu_base_rs / rho_r.
@@ -38,6 +39,8 @@ struct gkyl_moment_em_coupling {
   double friction_Z; // Ionization number for frictional sources.
   double friction_T_elc; // Electron temperature for frictional sources.
   double friction_Lambda_ee; // Electron-electron collisional terms for frictional sources.
+  double friction_tau_en; // Electron-neutral momentum relaxation time for frictional sources.
+  double friction_tau_in; // Ion-neutral momentum relaxation time for frictional sources.
 
   bool has_volume_sources; // Run with volume-based geometrical sources.
   double volume_gas_gamma; // Adiabatic index for volume-based geometrical sources.

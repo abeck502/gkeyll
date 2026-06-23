@@ -4,6 +4,7 @@
 #include <gkyl_comm.h>
 #include <gkyl_evalf_def.h>
 #include <gkyl_moment_braginskii.h>
+#include <gkyl_moment_viscosity.h>
 #include <gkyl_mp_scheme.h>
 #include <gkyl_util.h>
 #include <gkyl_wave_prop.h>
@@ -25,12 +26,17 @@ struct gkyl_moment_species {
   enum gkyl_wave_split_type split_type; // edge splitting to use
 
   enum gkyl_braginskii_type type_brag; // which Braginskii equations
+  enum gkyl_viscosity_type type_visc; // which viscosity model to use (now just constant dynamic viscosity)
+
+  double mu_visc; // dynamic viscosity for constant viscosity model
 
   bool has_friction; // Run with frictional sources.
   bool use_explicit_friction; // Use an explicit (SSP-RK3) solver for integrating frictional sources.
   double friction_Z; // Ionization number for frictional sources.
   double friction_T_elc; // Electron temperature for frictional sources.
   double friction_Lambda_ee; // Electron-electron collisional term for frictional sources.
+  double friction_tau_en; // Electron-neutral momentum relaxation time for frictional sources.
+  double friction_tau_in; // Ion-neutral momentum relaxation time for frictional sources.
 
   bool has_volume_sources; // Run with volume-based geometrical sources.
   double volume_gas_gamma; // Adiabatic index for volume-based geometrical sources.
@@ -181,6 +187,7 @@ struct gkyl_moment {
   struct gkyl_moment_field field; // field object
 
   bool has_collision; // has collisions
+  double collision_n_floor; // number density floor for collisions
   // scaling factors for collision frequencies so that nu_sr=nu_base_sr/rho_s
   // nu_rs=nu_base_rs/rho_r, and nu_base_sr=nu_base_rs
   double nu_base[GKYL_MAX_SPECIES][GKYL_MAX_SPECIES];
@@ -189,6 +196,11 @@ struct gkyl_moment {
 
   bool has_braginskii; // has Braginskii transport
   double coll_fac; // multiplicative collisionality factor for Braginskii  
+
+  bool has_viscosity; // has viscosity (switching)
+
+  double rho_floor; // Global mass density floor (reset to floor after applied bcs) for all species
+
 
   struct gkyl_app_parallelism_inp parallelism; // Parallelism-related inputs.
 };

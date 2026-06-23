@@ -44,10 +44,12 @@ explicit_nT_source_update(const gkyl_moment_em_coupling* mom_em, const double dt
 * @param f_ion_old Array of old ion fluid variables (before source update).
 * @param f_elc_new Array of new electron fluid variables (after source update).
 * @param f_ion_new Array of new ion fluid variables (after source update).
+* @param f_neut_old Array of old neutral fluid variables (before source update).
+* @param f_neut_new Array of new neutral fluid variables (after source update).
 */
 void
 explicit_frictional_source_update_euler(const gkyl_moment_em_coupling* mom_em, const double Z, const double T_elc, const double Lambda_ee,
-  double t_curr, const double dt, double* f_elc_old, double* f_ion_old, double* f_elc_new, double* f_ion_new);
+  double t_curr, const double dt, double* f_elc_old, double* f_ion_old, double* f_neut_old, double* f_elc_new, double* f_ion_new, double* f_neut_new);
 
 /**
 * Integrate the frictional source terms in the multi-fluid equation system within a single cell, using an explicit forcing solver (specifically a
@@ -492,7 +494,7 @@ explicit_higuera_cary_update(const gkyl_moment_em_coupling* mom_em, double t_cur
 
 /**
 * Integrate the electromagnetic source terms in the multi-fluid equation system within each cell, using an explicit forcing solver (specifically
-* a strong stability-preserving third-order Runge-Kutta method combined with a Higuera-Cary update), assuming a cold relativistic fluid.
+* a strong stability-preserving third-order Runge-Kutta method).
 *
 * @param mom_em Moment-EM coupling object.
 * @param t_curr Current simulation tine.

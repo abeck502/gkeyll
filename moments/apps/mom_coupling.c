@@ -29,6 +29,7 @@ moment_coupling_init(const struct gkyl_moment_app *app, struct moment_coupling *
     };
 
   src_inp.has_collision = app->has_collision;
+  src_inp.collision_n_floor = app->collision_n_floor;
   for (int s=0; s<app->num_species; ++s)
     for (int r=0; r<app->num_species; ++r)
       src_inp.nu_base[s][r] = app->nu_base[s][r];
@@ -53,6 +54,8 @@ moment_coupling_init(const struct gkyl_moment_app *app, struct moment_coupling *
         src_inp.friction_Z = app->species[i].friction_Z;
         src_inp.friction_T_elc = app->species[i].friction_T_elc;
         src_inp.friction_Lambda_ee = app->species[i].friction_Lambda_ee;
+        src_inp.friction_tau_en = app->species[i].friction_tau_en;
+        src_inp.friction_tau_in = app->species[i].friction_tau_in;
       }
     }
 
@@ -211,12 +214,28 @@ moment_coupling_init(const struct gkyl_moment_app *app, struct moment_coupling *
   gkyl_create_vertex_ranges(&app->local, ghost, &src->non_ideal_local_ext,
     &src->non_ideal_local);
 
+  // Allocate non-ideal variables once per species using the maximum
+  // number of components required by the enabled non-ideal models.
+  // - ten-moment closures store nadj*10 components at each vertex
+  // - Braginskii/viscosity transport stores 9 components (Pi + q)
+  int nadj[3] = { 1, 4, 8 };
+  for (int i=0; i<app->num_species; ++i) {
+    int ncomp_non_ideal = 0;
+
+    if (app->species[i].eqn_type == GKYL_EQN_TEN_MOMENT
+      && (app->species[i].has_grad_closure || app->species[i].has_nn_closure))
+      ncomp_non_ideal = nadj[app->ndim - 1]*10;
+
+    if (app->has_braginskii || app->has_viscosity)
+      ncomp_non_ideal = ncomp_non_ideal > 9 ? ncomp_non_ideal : 9;
+
+    if (ncomp_non_ideal > 0)
+      src->non_ideal_vars[i] = mkarr(false, ncomp_non_ideal, src->non_ideal_local_ext.volume);
+  }
+
   // check if gradient-closure is present
   for (int i=0; i<app->num_species; ++i) {
     if (app->species[i].eqn_type == GKYL_EQN_TEN_MOMENT && app->species[i].has_grad_closure) {
-      int nadj[3] = { 1, 4, 8 }; // cells adjacent to a vertex
-      src->non_ideal_vars[i] = mkarr(false, nadj[app->ndim - 1]*10,
-        src->non_ideal_local_ext.volume);
       struct gkyl_ten_moment_grad_closure_inp grad_closure_inp = {
         .grid = &app->grid,
         .k0 = app->species[i].k0,
@@ -271,6 +290,22 @@ moment_coupling_init(const struct gkyl_moment_app *app, struct moment_coupling *
     }
     src->brag_slvr = gkyl_moment_braginskii_new(brag_inp);
   }
+
+  // check if viscosity terms are present
+  if (app->has_viscosity) {
+    struct gkyl_moment_viscosity_inp visc_inp = {
+    .grid = &app->grid,
+    .nfluids = app->num_species,
+  };
+  for (int i = 0; i < app->num_species; ++i) {
+    visc_inp.param[i] = (struct gkyl_moment_viscosity_data) {
+      .type_eqn = app->species[i].eqn_type,
+      .type_visc = app->species[i].type_visc,
+      .mu = app->species[i].mu_visc,
+    };
+  }
+  src->visc_slvr = gkyl_moment_viscosity_new(visc_inp);
+  }
 }
 
 // update sources: 'nstrang' is 0 for the first Strang step and 1 for
@@ -284,6 +319,11 @@ moment_coupling_update(gkyl_moment_app *app, struct moment_coupling *src,
   const struct gkyl_array *app_accels[GKYL_MAX_SPECIES];
   const struct gkyl_array *pr_rhs_const[GKYL_MAX_SPECIES];
   const struct gkyl_array *nT_sources[GKYL_MAX_SPECIES];
+  const struct gkyl_array *species_embed_mask[GKYL_MAX_SPECIES] = {0};
+  // Getting embed mask for species and field (if it exists) A.B. added 2/19/26 - mask out source updates in embedded regions.
+  for (int i=0; i<app->num_species; ++i) {
+    species_embed_mask[i] = app->species[i].embed_mask;
+  }
 
   double dt_suggested = DBL_MAX;
   struct gkyl_ten_moment_grad_closure_status stat;
@@ -328,6 +368,13 @@ moment_coupling_update(gkyl_moment_app *app, struct moment_coupling *src,
       src->non_ideal_cflrate, src->non_ideal_vars, src->pr_rhs);
   }
 
+  if (app->has_viscosity) {
+  gkyl_moment_viscosity_advance(src->visc_slvr,
+    src->non_ideal_local, app->local,
+    fluids, src->non_ideal_cflrate, src->non_ideal_vars, src->pr_rhs);
+  }
+
+
   if (app->field.ext_em_evolve) {
     gkyl_fv_proj_advance(app->field.ext_em_proj, tcurr, &app->local, app->field.ext_em);
   }
@@ -335,8 +382,8 @@ moment_coupling_update(gkyl_moment_app *app, struct moment_coupling *src,
   if (app->field.app_current_evolve) {
     if (app->field.use_explicit_em_coupling) {
       gkyl_fv_proj_advance(app->field.app_current_proj, tcurr, &app->local, app->field.app_current);
-      gkyl_fv_proj_advance(app->field.app_current_proj, tcurr + dt*2, &app->local, app->field.app_current1);
-      gkyl_fv_proj_advance(app->field.app_current_proj, tcurr + 2*dt/2.0, &app->local, app->field.app_current2);
+      gkyl_fv_proj_advance(app->field.app_current_proj, tcurr + dt, &app->local, app->field.app_current1);
+      gkyl_fv_proj_advance(app->field.app_current_proj, tcurr + 0.5*dt, &app->local, app->field.app_current2);
     }
     else {
       gkyl_fv_proj_advance(app->field.app_current_proj, tcurr, &app->local, app->field.app_current);
@@ -371,7 +418,7 @@ moment_coupling_update(gkyl_moment_app *app, struct moment_coupling *src,
     gkyl_moment_em_coupling_implicit_advance(src->slvr, tcurr, dt, &app->local,
       fluids, app_accels, pr_rhs_const, 
       app->field.f[sidx[nstrang]], app->field.app_current, app->field.ext_em, 
-      nT_sources);
+      nT_sources, species_embed_mask);
   }
 
   for (int i=0; i<app->num_species; ++i) {
@@ -404,5 +451,8 @@ moment_coupling_release(const struct gkyl_moment_app *app, const struct moment_c
   }
   if (app->has_braginskii)
     gkyl_moment_braginskii_release(src->brag_slvr);
-}
+    
+  if (app->has_viscosity)
+  gkyl_moment_viscosity_release(src->visc_slvr);
 
+}

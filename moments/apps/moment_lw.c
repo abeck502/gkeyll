@@ -5314,6 +5314,7 @@ mom_app_new(lua_State *L)
   }
 
   mom.has_collision = glua_tbl_get_bool(L, "hasCollision", false);
+  mom.collision_n_floor = glua_tbl_get_number(L, "collisionNFloor", 0.0);
   with_lua_tbl_tbl(L, "nuBase") {
     for (int s = 0; s < mom.num_species; s++) {
       if (glua_tbl_iget_tbl(L, s + 1)) {

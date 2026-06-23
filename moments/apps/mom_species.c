@@ -15,6 +15,8 @@ moment_species_init(const struct gkyl_moment *mom, const struct gkyl_moment_spec
   sp->ctx = mom_sp->ctx;
   sp->init = mom_sp->init;
 
+  sp->rho_floor = mom->rho_floor; // mass density floor (reset to floor after applied bcs)
+
   sp->eqn_type = mom_sp->equation->type;
   sp->num_equations = mom_sp->equation->num_equations;
   sp->equation = gkyl_wv_eqn_acquire(mom_sp->equation);
@@ -45,6 +47,13 @@ moment_species_init(const struct gkyl_moment *mom, const struct gkyl_moment_spec
     sp->type_brag = mom_sp->type_brag;
   }
 
+  // check if we are running with viscosity and fetch viscosity type
+  if (app->has_viscosity) {
+    sp->update_sources = true; 
+    sp->type_visc = mom_sp->type_visc;
+    sp->mu_visc = mom_sp->mu_visc;
+  }
+
   if (mom_sp->has_friction) {
     sp->update_sources = true; 
     sp->has_friction = true;
@@ -53,6 +62,8 @@ moment_species_init(const struct gkyl_moment *mom, const struct gkyl_moment_spec
     sp->friction_Z = mom_sp->friction_Z;
     sp->friction_T_elc = mom_sp->friction_T_elc;
     sp->friction_Lambda_ee = mom_sp->friction_Lambda_ee;
+    sp->friction_tau_en = mom_sp->friction_tau_en;
+    sp->friction_tau_in = mom_sp->friction_tau_in;
   }
   else {
     sp->has_friction = false;
@@ -428,6 +439,16 @@ moment_species_apply_bc(gkyl_moment_app *app, double tcurr,
         moment_apply_wedge_bc(app, tcurr, &app->local,
           sp->bc_buffer, d, sp->lower_bc[d], sp->upper_bc[d], f);
     }
+  
+  // A.B. 3-9-26 Applying Density Floor on all local + ghost cells
+  struct gkyl_range_iter iter;
+  gkyl_range_iter_init(&iter, &app->local_ext);
+  while (gkyl_range_iter_next(&iter)) {
+    double *q = gkyl_array_fetch(f, gkyl_range_idx(&app->local_ext, iter.idx));
+    q[0] = fmax(q[0], sp->rho_floor);
+  }
+
+
 
   // sync interior ghost cells
   gkyl_comm_array_sync(app->comm, &app->local, &app->local_ext, f);
