@@ -2,9 +2,9 @@
 # Generated automatically! Do not edit
 
 .PHONY:
-all: core core-unit core-regression ## Build only specified Apps (core)
+all: moments moments-unit moments-regression ## Build only specified Apps (moments)
 
 .PHONY: install
-install: core-install ## Install gkeyll executable
+install: moments-install ## Install gkeyll executable
 	cd gkeyll && ${MAKE} -f Makefile-gkeyll install
 

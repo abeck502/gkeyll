@@ -11,9 +11,9 @@ APP=pkpm
 ALLTARGETS=gkeyll
 INSTALLTARGET=gkeyll
 
-FIN_APP_LIB_DIR="-L../\${BUILD_DIR}/pkpm"
-FIN_APP_LIB_NAME=${FIN_APP_LIB_DIR}/libg0pkpm.so
-FIN_APP_LIB="-lg0pkpm"
+FIN_APP_LIB_DIR="-L../\${BUILD_DIR}/moments"
+FIN_APP_LIB_NAME=${FIN_APP_LIB_DIR}/libg0moments.so
+FIN_APP_LIB="-lg0moments"
 
 HAVE_APP_FLAGS=""
 
